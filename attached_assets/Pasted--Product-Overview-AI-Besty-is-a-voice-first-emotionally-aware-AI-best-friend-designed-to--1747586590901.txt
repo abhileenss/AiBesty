@@ -1,0 +1,96 @@
+## 🎯 Product Overview
+
+**AI Besty** is a voice-first, emotionally aware AI best friend designed to be a safe, simple space to unload your day—from work rants to relationship drama. It adapts to your chosen mood/personality and talks back like a real friend would. The product prioritizes radical simplicity: no clutter, no distractions—just a circle, your voice, and your Besty.
+
+## 🔥 Key Value Propositions
+
+- **Instant Connection**: One-click email sign-up → straight to talking.
+- **Customizable Personas**: Choose male/female, pick mood (cheerful, chill, sassy, etc.).
+- **Always Listening**: Besty absorbs your life stories without judgment.
+- **Voice-First Simplicity**: Talking is the UI. No complex screens.
+- **Re-voice a Memory**: Upload a loved one's voice → create a custom Besty personality.
+
+---
+
+## 🧩 Core Features
+
+### 1. **Landing Experience**
+
+- A blank screen with a single circle in the center.
+- Micro-interaction (pulse or glow) indicating readiness to listen.
+- User can start talking instantly post sign-up.
+
+### 2. **One-Click Signup**
+
+- Input: Email address only
+- No password (magic link or OTP preferred)
+
+### 3. **Voice Input/Output**
+
+- **Deepgram** for real-time speech-to-text
+- **ElevenLabs** for emotionally expressive TTS
+
+### 4. **Persona Selector**
+
+- Choose voice: Male / Female / Custom voice upload (e.g. lost loved one)
+- Choose mood:
+    - Chill
+    - Cheerful
+    - Sass Queen
+    - Romantic
+    - Realist (no-bullshit mode)
+- **Custom Personality Designer**: Define tone, quirks, and conversational style manually
+
+### 5. **Conversational AI Engine**
+
+- **OpenAI API** (GPT-4)
+- Custom RAG setup (Chroma/FAISS)
+- Personality/mood-specific prompt templates
+
+### 6. **Minimal Interface**
+
+- No UI distractions
+- Audio waveform or chat log (optional)
+- End session → journal summary (optional future feature)
+
+---
+
+## 🧪 Tech Stack
+
+- **LLM Backend**: OpenAI API (GPT-4)
+- **Voice Input**: Deepgram STT
+- **Voice Output**: ElevenLabs TTS
+- **Memory/RAG**: Custom vector DB (Chroma or FAISS)
+- **Frontend**: React or Flutter (depending on web vs app)
+
+---
+
+---
+
+## 🎉 Future Features
+
+- Mood detection from voice tone
+- Personalized daily messages
+- Secure, encrypted memory
+- AI dreams (imagined messages while you sleep)
+
+---
+
+## 📅 Timeline
+
+**Week 1**: Basic front-end, email sign-up, voice I/O setup
+
+**Week 2**: Persona prompt wrapper, MVP convo loop
+
+**Week 3**: RAG + basic memory, first closed test
+
+**Week 4**: UX polish, live alpha launch
+
+---
+
+## 💬 Notes
+
+- The goal is not a productivity app. It's emotional companionship.
+- Simplicity is the brand.
+- Do less. Feel more.
+- Voice cloning is optional and meant for deeply personal use—must follow strict ethical and privacy standards.
