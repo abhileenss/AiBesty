@@ -242,6 +242,37 @@ app.use((req, res, next) => {
     }
   });
   
+  // Get recent conversation with messages
+  app.get('/api/conversations/recent', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      // Get user's conversations, sorted by most recent
+      const conversations = await storage.getConversationsByUserId(req.user.id);
+      
+      if (conversations.length === 0) {
+        // No existing conversations, return empty response
+        return res.status(200).json({ conversation: null, messages: [] });
+      }
+      
+      // Get the most recent conversation
+      const conversation = conversations[0];
+      
+      // Get messages for this conversation
+      const messages = await storage.getMessagesByConversationId(conversation.id);
+      
+      return res.status(200).json({
+        conversation,
+        messages
+      });
+    } catch (error) {
+      console.error('Get recent conversation error:', error);
+      return res.status(500).json({ message: 'Failed to get conversation' });
+    }
+  });
+  
   // Create conversation
   app.post('/api/conversations', requireAuth, async (req: Request, res: Response) => {
     try {
@@ -304,7 +335,7 @@ app.use((req, res, next) => {
         return res.status(401).json({ message: 'Authentication required' });
       }
       
-      const { conversationId, content } = req.body;
+      const { conversationId, content, isUserMessage = true } = req.body;
       
       // Validate input
       if (!conversationId || !content) {
@@ -322,54 +353,69 @@ app.use((req, res, next) => {
         return res.status(403).json({ message: 'Not authorized to access this conversation' });
       }
       
-      // Get the user's persona for this conversation
-      let personaMood = 'chill'; // Default mood
-      let personaVoice = 'female'; // Default voice
-      
-      if (conversation.personaId) {
-        const persona = await storage.getPersona(conversation.personaId);
-        if (persona) {
-          personaMood = persona.mood;
-          personaVoice = persona.voice;
-        }
-      }
-      
-      // Create user message
-      const userMessage = await storage.createMessage({
+      // Create message in the database
+      const newMessage = await storage.createMessage({
         conversationId,
         content,
-        isUserMessage: true
+        isUserMessage
       });
       
-      // Get all messages for context
-      const allMessages = await storage.getMessagesByConversationId(conversationId);
-      
-      // Import and use OpenAI getAIResponse
-      const { getAIResponse } = await import('./lib/openai');
-      
-      // Get AI response
-      const aiResponseText = await getAIResponse(
-        content, 
-        conversation, 
-        allMessages, 
-        personaMood
-      );
-      
-      // Create AI message in the database
-      const aiMessage = await storage.createMessage({
-        conversationId,
-        content: aiResponseText,
-        isUserMessage: false
-      });
-      
-      // Generate audio URL (mock for now)
-      const audioUrl = `/api/audio/${aiMessage.id}.mp3`;
-      
-      return res.status(201).json({
-        message: userMessage,
-        aiResponse: aiMessage,
-        audioUrl
-      });
+      // If this is a user message, generate AI response
+      if (isUserMessage) {
+        // Get the user's persona for this conversation
+        let personaMood = 'chill'; // Default mood
+        let personaVoice = 'female'; // Default voice
+        
+        if (conversation.personaId) {
+          const persona = await storage.getPersona(conversation.personaId);
+          if (persona) {
+            personaMood = persona.mood;
+            personaVoice = persona.voice;
+          }
+        }
+        
+        // Get all messages for context
+        const allMessages = await storage.getMessagesByConversationId(conversationId);
+        
+        // Import and use OpenAI getAIResponse
+        const { getAIResponse } = await import('./lib/openai');
+        
+        try {
+          // Get AI response
+          const aiResponseText = await getAIResponse(
+            content, 
+            conversation, 
+            allMessages, 
+            personaMood
+          );
+          
+          // Create AI message in the database
+          const aiMessage = await storage.createMessage({
+            conversationId,
+            content: aiResponseText,
+            isUserMessage: false
+          });
+          
+          // Generate audio URL (mock for now)
+          const audioUrl = `/api/audio/${aiMessage.id}.mp3`;
+          
+          return res.status(201).json({
+            message: newMessage,
+            aiResponse: aiMessage,
+            audioUrl
+          });
+        } catch (aiError) {
+          console.error('AI response error:', aiError);
+          // If AI response fails, still return the user message
+          return res.status(201).json({
+            message: newMessage,
+            error: 'Failed to generate AI response'
+          });
+        }
+      } else {
+        // Just return the created message
+        return res.status(201).json(newMessage);
+      }
     } catch (error) {
       console.error('Send message error:', error);
       return res.status(500).json({ message: 'Failed to send message' });
