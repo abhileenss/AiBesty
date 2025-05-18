@@ -13,7 +13,8 @@ interface AuthViewProps {
 export function AuthView({ onSuccess }: AuthViewProps) {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
-  const { sendMagicLink, authenticating } = useAuth();
+  const [token, setToken] = useState('');
+  const { sendMagicLink, verifyToken, authenticating } = useAuth();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +33,24 @@ export function AuthView({ onSuccess }: AuthViewProps) {
     setEmailError('');
     
     // Send magic link
-    const success = await sendMagicLink(email);
-    if (success) {
-      onSuccess();
+    const result = await sendMagicLink(email);
+    if (result.success) {
+      // For testing: directly use the token that's returned in development
+      if (result.token) {
+        setToken(result.token);
+      } else {
+        onSuccess();
+      }
+    }
+  };
+  
+  // For testing in development - bypass email verification
+  const handleDirectVerify = async () => {
+    if (token) {
+      const success = await verifyToken(token);
+      if (success) {
+        onSuccess();
+      }
     }
   };
   
@@ -60,7 +76,7 @@ export function AuthView({ onSuccess }: AuthViewProps) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Your email"
-            className="w-full px-4 py-3 rounded-full border border-neutral-border focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-4 py-3 rounded-full border border-border focus:outline-none focus:ring-2 focus:ring-primary"
             aria-invalid={!!emailError}
             aria-describedby={emailError ? "email-error" : undefined}
           />
@@ -78,6 +94,20 @@ export function AuthView({ onSuccess }: AuthViewProps) {
           {authenticating ? 'Sending...' : 'Get Started'}
         </Button>
       </form>
+      
+      {token && (
+        <div className="mt-4 w-full">
+          <div className="bg-muted p-3 rounded-md text-xs text-left overflow-x-auto mb-2">
+            <code>{token}</code>
+          </div>
+          <Button
+            onClick={handleDirectVerify}
+            className="w-full bg-secondary text-white py-2 px-4 rounded-full font-medium transition hover:bg-opacity-90"
+          >
+            Use Token for Testing
+          </Button>
+        </div>
+      )}
       
       <p className="mt-6 text-sm text-gray-500">Just one click. No password needed.</p>
     </div>

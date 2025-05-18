@@ -125,7 +125,7 @@ app.use((req, res, next) => {
       return res.status(200).json({ 
         success: true, 
         message: 'Magic link email sent (check server logs for token)',
-        token: authToken.token // Note: only included for testing!
+        token: authToken.token // For direct testing in development
       });
     } catch (error) {
       console.error('Login error:', error);

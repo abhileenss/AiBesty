@@ -34,14 +34,14 @@ export function useAuth() {
   }, []);
 
   // Send magic link email
-  const sendMagicLink = async (email: string): Promise<boolean> => {
+  const sendMagicLink = async (email: string): Promise<{ success: boolean, token?: string }> => {
     if (!isValidEmail(email)) {
       toast({
         title: "Invalid email",
         description: "Please enter a valid email address",
         variant: "destructive"
       });
-      return false;
+      return { success: false };
     }
     
     setAuthenticating(true);
@@ -65,17 +65,21 @@ export function useAuth() {
       
       toast({
         title: "Magic link sent",
-        description: "Check your email for a login link"
+        description: "Use the token below for direct login during testing"
       });
       
-      return true;
+      return { 
+        success: true,
+        // For development testing, use the token that's returned directly
+        token: data.token
+      };
     } catch (error) {
       toast({
         title: "Authentication failed",
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: "destructive"
       });
-      return false;
+      return { success: false };
     } finally {
       setAuthenticating(false);
     }
