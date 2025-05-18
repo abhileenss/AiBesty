@@ -72,7 +72,7 @@ export const authTokens = pgTable("auth_tokens", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
-  expires: timestamp("expires").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
   used: boolean("used").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -80,7 +80,7 @@ export const authTokens = pgTable("auth_tokens", {
 export const insertAuthTokenSchema = createInsertSchema(authTokens).pick({
   email: true,
   token: true,
-  expires: true,
+  expiresAt: true,
 });
 
 // Export all types

@@ -57,6 +57,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize database
+  try {
+    const { initializeDatabase } = await import('./db-setup');
+    await initializeDatabase();
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+  }
+  
   // Set up session middleware
   const MemoryStoreSession = MemoryStore(session);
   
