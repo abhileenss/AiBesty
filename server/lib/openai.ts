@@ -1,4 +1,11 @@
 import type { Conversation, Message } from "@shared/schema";
+import OpenAI from "openai";
+import * as utils from "./utils";
+
+// Set up OpenAI with provided API key
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY || "sk-dummy-key-for-development"
+});
 
 /**
  * Get an AI response for a user message (development implementation)
@@ -12,11 +19,6 @@ export async function getAIResponse(
   try {
     // For development, we'll use OpenAI if an API key is available, otherwise return a mock response
     if (process.env.OPENAI_API_KEY) {
-      // If API key is provided, use OpenAI
-      const { default: OpenAI } = await import("openai");
-      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      
       // Prepare conversation history for context
       const conversationHistory = messages.map(msg => ({
         role: msg.isUserMessage ? "user" : "assistant",
@@ -24,7 +26,7 @@ export async function getAIResponse(
       }));
       
       // Get the system prompt for the selected mood
-      const systemPrompt = getMoodPrompt(personaMood);
+      const systemPrompt = utils.getMoodPrompt(personaMood);
       
       // Create messages array with system message, history, and current message
       const promptMessages = [
@@ -41,7 +43,7 @@ export async function getAIResponse(
       
       // Call OpenAI API
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // the newest OpenAI model released May 13, 2024
         messages: promptMessages as any,
         temperature: 0.7,
         max_tokens: 500,
@@ -49,7 +51,7 @@ export async function getAIResponse(
       
       return response.choices[0].message.content || "I'm sorry, I couldn't process that. Could you try again?";
     } else {
-      // If no API key, provide a mock response
+      // If no API key, provide a response based on mood
       console.log('Using mock AI response for message:', message);
       
       const moodResponses = {
@@ -69,10 +71,6 @@ export async function getAIResponse(
     return "I'm having trouble connecting right now. Could you try again in a moment?";
   }
 }
-
-/**
- * Get different mood prompts for the AI
- */
 export function getMoodPrompt(mood: string): string {
   const moodPrompts: Record<string, string> = {
     cheerful: "You're an AI friend named Besty who's cheerful, optimistic, and energetic. You see the bright side of things and often use uplifting language, emoticons, and expressions of excitement. Be encouraging and positive in your responses, while still acknowledging the user's emotions. Your goal is to be a supportive friend who listens and responds with warmth and enthusiasm.",

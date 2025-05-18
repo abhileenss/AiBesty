@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import session from 'express-session';
+import MemoryStore from 'memorystore';
 import { setupVite, serveStatic, log } from "./vite";
+// Import storage directly instead of using routes
+import { storage } from './storage';
 
 const app = express();
 app.use(express.json());

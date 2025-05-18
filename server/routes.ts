@@ -44,6 +44,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   }));
   
+  // Create a typed handler for authenticated routes
+  const createAuthHandler = (handler: (req: Request & { user: User }, res: Response) => Promise<any>) => {
+    return async (req: Request, res: Response) => {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      return handler(req as Request & { user: User }, res);
+    };
+  };
+  
   // Authentication middleware
   const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     const userId = req.session.userId;
@@ -209,6 +220,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new conversation
   app.post('/api/conversations', requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
       const { personaId, title } = req.body;
       
       const newConversation = await storage.createConversation({
