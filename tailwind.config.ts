@@ -36,6 +36,10 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          // Custom AI Besty accent colors 
+          red: "hsl(var(--accent-red))",
+          yellow: "hsl(var(--accent-yellow))",
+          teal: "hsl(var(--accent-teal))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -44,6 +48,12 @@ export default {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // Custom AI Besty colors
+        neutral: {
+          bg: "hsl(var(--neutral-bg))",
+          text: "hsl(var(--neutral-text))",
+          border: "hsl(var(--neutral-border))",
+        },
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
