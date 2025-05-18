@@ -45,7 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
   
   // Authentication middleware
-  const requireAuth = async (req: Request, res: Response, next: Function) => {
+  const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     const userId = req.session.userId;
     
     if (!userId) {
@@ -59,6 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: 'Invalid session' });
     }
     
+    // Set user in request
     req.user = user;
     next();
   };
@@ -141,6 +142,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create or update persona
   app.post('/api/personas', requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
       const { voice, mood, customVoiceId, customMoodSettings } = req.body;
       
       // Validate input
@@ -182,6 +187,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's current persona
   app.get('/api/personas/current', requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
       const personas = await storage.getPersonasByUserId(req.user.id);
       
       if (personas.length === 0) {
@@ -255,6 +264,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's most recent conversation with messages
   app.get('/api/conversations/recent', requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
       const conversations = await storage.getConversationsByUserId(req.user.id);
       
       if (conversations.length === 0) {
@@ -263,7 +276,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get the most recent conversation
       const recentConversation = conversations.sort((a, b) => {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        return bTime - aTime;
       })[0];
       
       // Get messages for this conversation
