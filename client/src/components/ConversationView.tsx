@@ -67,13 +67,47 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
         throw new Error("Failed to save user message");
       }
       
-      setTextMessage('');
+      const savedUserMessage = await saveUserMessageResponse.json();
       
-      // Refresh the conversation after sending
-      setTimeout(() => {
-        // Reload the page to see the updated conversation
-        window.location.reload();
-      }, 1000);
+      // Update messages state with user message
+      const updatedMessages = [...messages, savedUserMessage];
+      
+      setTextMessage('');
+      toast({
+        title: "Message sent",
+        description: "Waiting for Besty's response...",
+      });
+      
+      // Fetch AI response through chat endpoint
+      try {
+        const chatResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            message: userMessage.content
+          }),
+          credentials: 'include'
+        });
+        
+        if (chatResponse.ok) {
+          // Update messages by refetching them
+          const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
+            credentials: 'include'
+          });
+          
+          if (messagesResponse.ok) {
+            const newMessages = await messagesResponse.json();
+            // Don't use window.location.reload() to avoid full page refresh
+            toast({
+              title: "Besty replied",
+              description: "Check out Besty's response!",
+            });
+          }
+        }
+      } catch (chatError) {
+        console.error("Failed to get AI response:", chatError);
+      }
       
     } catch (error) {
       console.error("Failed to send text message:", error);

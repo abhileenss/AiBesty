@@ -34,7 +34,7 @@ export function TranscriptModal({ open, onClose, messages }: TranscriptModalProp
               messages.map((message) => (
                 <div key={message.id} className="flex flex-col">
                   <span className="text-xs text-gray-500 mb-1">
-                    {message.isUserMessage ? 'You' : 'Besty'} • {formatTime(new Date(message.createdAt))}
+                    {message.isUserMessage ? 'You' : 'Besty'} • {message.createdAt ? formatTime(new Date(message.createdAt)) : 'Just now'}
                   </span>
                   <div className={`p-3 rounded-lg ${
                     message.isUserMessage ? 'bg-gray-100' : 'bg-primary bg-opacity-10'
