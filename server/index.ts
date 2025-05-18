@@ -23,8 +23,8 @@ declare module 'express-session' {
 }
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -429,17 +429,10 @@ app.use((req, res, next) => {
         return res.status(401).json({ message: 'Authentication required' });
       }
       
-      // Check if request has audio data in base64 format
-      const { audioBase64 } = req.body;
-      
-      if (!audioBase64) {
-        return res.status(400).json({ message: 'Audio data is required' });
-      }
-      
-      // Mock implementation for development
-      // In production, this would call a real speech-to-text service
+      // For testing, provide a mock transcription without requiring audio data
+      // This allows testing of the conversation flow without microphone access
       const mockResponse = {
-        text: "This is a mock transcription of what the user said.",
+        text: "Hello Besty, how are you doing today?",
         confidence: 0.95
       };
       

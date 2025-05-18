@@ -33,9 +33,11 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
   // Fetch or create a conversation when component mounts
   useEffect(() => {
     const initConversation = async () => {
-      if (!userId) return;
+      if (!userId || !persona) return;
       
       try {
+        console.log("Initializing conversation with persona:", persona);
+        
         // Try to get the most recent conversation
         const response = await fetch(`/api/conversations/recent`, {
           credentials: 'include'
@@ -43,16 +45,23 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
         
         if (response.ok) {
           const data = await response.json();
-          if (data) {
+          if (data && data.conversation) {
+            console.log("Found existing conversation:", data.conversation);
             setConversation(data.conversation);
             setMessages(data.messages || []);
             return;
           }
         }
         
-        // If no recent conversation or error, create a new one
-        if (persona) {
-          await createConversation(persona.id);
+        // No existing conversation or it wasn't returned properly, create a new one
+        console.log("Creating new conversation with persona ID:", persona.id);
+        const newConversation = await createConversation(persona.id);
+        
+        if (newConversation) {
+          console.log("Successfully created new conversation:", newConversation);
+        } else {
+          console.error("Failed to create conversation");
+          setError("Failed to create conversation");
         }
       } catch (error) {
         console.error("Failed to initialize conversation:", error);
@@ -60,9 +69,7 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
       }
     };
     
-    if (userId) {
-      initConversation();
-    }
+    initConversation();
   }, [userId, persona]);
   
   // Create a new conversation

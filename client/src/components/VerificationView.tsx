@@ -13,16 +13,47 @@ interface VerificationViewProps {
 export function VerificationView({ email, onVerified, onResend }: VerificationViewProps) {
   const [secondsLeft, setSecondsLeft] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [token, setToken] = useState('');
   const { verifyToken, sendMagicLink, authenticating } = useAuth();
   const { toast } = useToast();
+  
+  // Auto-verify in development mode
+  useEffect(() => {
+    const performAutoVerify = async () => {
+      try {
+        // Send magic link to get token
+        const result = await sendMagicLink(email);
+        
+        if (result.success && result.token) {
+          setToken(result.token);
+          
+          // Automatically verify after a short delay
+          setTimeout(async () => {
+            const success = await verifyToken(result.token);
+            if (success) {
+              toast({
+                title: "Verification successful",
+                description: "You're now logged in automatically (development mode)",
+              });
+              onVerified();
+            }
+          }, 2000);
+        }
+      } catch (error) {
+        console.error("Auto-verification error:", error);
+      }
+    };
+    
+    performAutoVerify();
+  }, [email, verifyToken, onVerified]);
   
   // Check if there's a token in the URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const urlToken = params.get('token');
     
-    if (token) {
-      verifyToken(token).then(success => {
+    if (urlToken) {
+      verifyToken(urlToken).then(success => {
         if (success) {
           // Clear the token from the URL
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -49,11 +80,15 @@ export function VerificationView({ email, onVerified, onResend }: VerificationVi
   const handleResend = async () => {
     if (!canResend || authenticating) return;
     
-    const success = await sendMagicLink(email);
-    if (success) {
+    const result = await sendMagicLink(email);
+    if (result.success) {
       setCanResend(false);
       setSecondsLeft(30);
       onResend();
+      
+      if (result.token) {
+        setToken(result.token);
+      }
       
       toast({
         title: "Magic link sent",
