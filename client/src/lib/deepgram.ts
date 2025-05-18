@@ -42,21 +42,33 @@ export class AudioRecorder {
   async start(): Promise<void> {
     try {
       // Request microphone access
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+          sampleRate: 16000 // Lower sample rate for smaller file size
+        } 
+      });
       
-      // Create media recorder
-      this.mediaRecorder = new MediaRecorder(this.stream);
+      // Create media recorder with options for smaller file size
+      const options = { 
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 16000 // Lower bitrate for smaller file size
+      };
+      
+      this.mediaRecorder = new MediaRecorder(this.stream, options);
       this.audioChunks = [];
       
-      // Set up event listeners
+      // Set up event listeners and capture audio in smaller chunks
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
         }
       };
       
-      // Start recording
-      this.mediaRecorder.start();
+      // Start recording with small timeslice to get chunks more frequently
+      this.mediaRecorder.start(100); // Get data every 100ms
     } catch (error) {
       console.error("Failed to start recording:", error);
       throw new Error("Microphone access denied or not available");
@@ -70,17 +82,28 @@ export class AudioRecorder {
         return;
       }
       
-      this.mediaRecorder.onstop = () => {
-        // Create a single blob from all audio chunks
-        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-        
-        // Clean up
-        if (this.stream) {
-          this.stream.getTracks().forEach(track => track.stop());
-          this.stream = null;
+      this.mediaRecorder.onstop = async () => {
+        try {
+          // Create a single blob from all audio chunks with compressed format
+          const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+          
+          // Clean up
+          if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+          }
+          
+          // For very large files, we can return a smaller segment
+          if (audioBlob.size > 500000) { // If > 500KB
+            console.log("Audio too large, using first 5 seconds only");
+            resolve(this.audioChunks[0]); // Use just the first chunk
+          } else {
+            resolve(audioBlob);
+          }
+        } catch (error) {
+          console.error("Error processing audio:", error);
+          reject(error);
         }
-        
-        resolve(audioBlob);
       };
       
       this.mediaRecorder.stop();

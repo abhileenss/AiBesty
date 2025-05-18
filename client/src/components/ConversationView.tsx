@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { CircleButton } from '@/components/ui/circle-button';
 import { AudioWave } from '@/components/ui/audio-wave';
 import { Button } from '@/components/ui/button';
-import { Mic, StopCircle, FileText, RefreshCw, UserCog } from 'lucide-react';
+import { Mic, StopCircle, FileText, RefreshCw, UserCog, Send, MessageSquare } from 'lucide-react';
 import { useConversation } from '@/hooks/use-conversation';
 import { TranscriptModal } from '@/components/TranscriptModal';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import type { Persona } from '@/lib/types';
 
 interface ConversationViewProps {
@@ -15,6 +17,9 @@ interface ConversationViewProps {
 
 export function ConversationView({ userId, persona, onChangePersona }: ConversationViewProps) {
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textMessage, setTextMessage] = useState('');
+  const { toast } = useToast();
   
   const { 
     messages,
@@ -23,18 +28,38 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     isProcessing,
     isResponding,
     toggleListening,
-    createConversation
+    createConversation,
+    sendMessage
   } = useConversation({ userId, initialPersona: persona });
   
   const getStatusText = () => {
     if (isProcessing) return "Processing...";
     if (isResponding) return "Besty is responding...";
     if (isListening) return "I'm listening...";
-    return "Tap the circle to start talking";
+    return showTextInput ? "Type a message to Besty..." : "Tap the circle to start talking";
   };
   
   const handleRestartConversation = async () => {
     await createConversation(persona.id);
+  };
+  
+  const handleSendTextMessage = async () => {
+    if (!textMessage.trim() || isProcessing || isResponding || !conversation) return;
+    
+    try {
+      await sendMessage({
+        text: textMessage,
+        type: 'user'
+      });
+      setTextMessage('');
+    } catch (error) {
+      console.error("Failed to send text message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    }
   };
   
   const renderMicIcon = () => {
