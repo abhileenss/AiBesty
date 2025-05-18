@@ -443,13 +443,28 @@ app.use((req, res, next) => {
           const OpenAI = await import('openai');
           const openai = new OpenAI.default({ apiKey: process.env.OPENAI_API_KEY });
           
+          // Get audio data from request
+          const { audio } = req.body;
+          
+          if (!audio) {
+            console.log("No audio data provided");
+            return res.json(mockResponse);
+          }
+          
+          // Parse base64 data (remove data URL prefix if present)
+          let audioBase64 = audio;
+          if (audio.includes(',')) {
+            audioBase64 = audio.split(',')[1];
+          }
+          
           // Convert base64 to buffer
           const audioBuffer = Buffer.from(audioBase64, 'base64');
           
           // Save to temporary file
           const fs = await import('fs/promises');
           const path = await import('path');
-          const tempFile = path.default.join(import.meta.dirname, 'temp_audio.wav');
+          const timestamp = Date.now();
+          const tempFile = `/tmp/audio_${timestamp}.webm`;
           await fs.writeFile(tempFile, audioBuffer);
           
           // Create readable stream from file
