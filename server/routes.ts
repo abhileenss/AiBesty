@@ -1,0 +1,449 @@
+import type { Express, Request, Response, NextFunction } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { z } from "zod";
+import { insertUserSchema, insertAuthTokenSchema, insertPersonaSchema, insertConversationSchema, insertMessageSchema, User } from "@shared/schema";
+import { transcribeAudio } from "./lib/deepgram";
+import { textToSpeech } from "./lib/elevenlabs";
+import { getAIResponse } from "./lib/openai";
+import { sendMagicLinkEmail } from "./lib/email";
+import { generateToken, saveBufferToFile, generateFilename } from "./lib/utils";
+import { promises as fs } from 'fs';
+import path from 'path';
+import session from 'express-session';
+import express from 'express';
+import MemoryStore from 'memorystore';
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
+
+// Extend session with userId
+declare module 'express-session' {
+  interface SessionData {
+    userId?: number;
+  }
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up session middleware
+  const MemoryStoreSession = MemoryStore(session);
+  
+  app.use(session({
+    secret: process.env.SESSION_SECRET || 'ai-besty-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 24 * 60 * 60 * 1000 }, // 24 hours
+    store: new MemoryStoreSession({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    })
+  }));
+  
+  // Authentication middleware
+  const requireAuth = async (req: Request, res: Response, next: Function) => {
+    const userId = req.session.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ message: 'Invalid session' });
+    }
+    
+    req.user = user;
+    next();
+  };
+  
+  // AUTH ROUTES
+  
+  // Login with email (send magic link)
+  app.post('/api/auth/login', async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ success: false, message: 'Email is required' });
+      }
+      
+      // Create or find user
+      let user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        user = await storage.createUser({ email });
+      }
+      
+      // Generate auth token
+      const authToken = await storage.createAuthToken(email);
+      
+      // Send magic link email
+      const emailSent = await sendMagicLinkEmail(email, authToken.token);
+      
+      if (!emailSent) {
+        return res.status(500).json({ success: false, message: 'Failed to send magic link email' });
+      }
+      
+      return res.status(200).json({ success: true, message: 'Magic link email sent' });
+    } catch (error) {
+      console.error('Login error:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+  
+  // Verify magic link token
+  app.post('/api/auth/verify', async (req: Request, res: Response) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ success: false, message: 'Token is required' });
+      }
+      
+      // Validate token and get user
+      const user = await storage.validateAuthToken(token);
+      
+      if (!user) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      }
+      
+      // Set session
+      req.session.userId = user.id;
+      
+      return res.status(200).json({ success: true, user });
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+  
+  // Get current user
+  app.get('/api/auth/me', requireAuth, async (req: Request, res: Response) => {
+    res.status(200).json(req.user);
+  });
+  
+  // Logout
+  app.post('/api/auth/logout', async (req: Request, res: Response) => {
+    req.session.destroy(() => {
+      res.status(200).json({ success: true });
+    });
+  });
+  
+  // PERSONA ROUTES
+  
+  // Create or update persona
+  app.post('/api/personas', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { voice, mood, customVoiceId, customMoodSettings } = req.body;
+      
+      // Validate input
+      if (!voice || !mood) {
+        return res.status(400).json({ message: 'Voice and mood are required' });
+      }
+      
+      // Check if user already has a persona
+      const existingPersonas = await storage.getPersonasByUserId(req.user.id);
+      
+      if (existingPersonas.length > 0) {
+        // Update existing persona
+        const updatedPersona = await storage.updatePersona(existingPersonas[0].id, {
+          voice,
+          mood,
+          customVoiceId,
+          customMoodSettings
+        });
+        
+        return res.status(200).json(updatedPersona);
+      }
+      
+      // Create new persona
+      const newPersona = await storage.createPersona({
+        userId: req.user.id,
+        voice,
+        mood,
+        customVoiceId,
+        customMoodSettings
+      });
+      
+      return res.status(201).json(newPersona);
+    } catch (error) {
+      console.error('Create persona error:', error);
+      return res.status(500).json({ message: 'Failed to create persona' });
+    }
+  });
+  
+  // Get user's current persona
+  app.get('/api/personas/current', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const personas = await storage.getPersonasByUserId(req.user.id);
+      
+      if (personas.length === 0) {
+        return res.status(404).json({ message: 'No persona found' });
+      }
+      
+      return res.status(200).json(personas[0]);
+    } catch (error) {
+      console.error('Get persona error:', error);
+      return res.status(500).json({ message: 'Failed to get persona' });
+    }
+  });
+  
+  // CONVERSATION ROUTES
+  
+  // Create new conversation
+  app.post('/api/conversations', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { personaId, title } = req.body;
+      
+      const newConversation = await storage.createConversation({
+        userId: req.user.id,
+        personaId: personaId,
+        title: title || 'New Conversation'
+      });
+      
+      return res.status(201).json(newConversation);
+    } catch (error) {
+      console.error('Create conversation error:', error);
+      return res.status(500).json({ message: 'Failed to create conversation' });
+    }
+  });
+  
+  // Get user's conversations
+  app.get('/api/conversations', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conversations = await storage.getConversationsByUserId(req.user.id);
+      return res.status(200).json(conversations);
+    } catch (error) {
+      console.error('Get conversations error:', error);
+      return res.status(500).json({ message: 'Failed to get conversations' });
+    }
+  });
+  
+  // Get a specific conversation
+  app.get('/api/conversations/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation ID' });
+      }
+      
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      return res.status(200).json(conversation);
+    } catch (error) {
+      console.error('Get conversation error:', error);
+      return res.status(500).json({ message: 'Failed to get conversation' });
+    }
+  });
+  
+  // Get user's most recent conversation with messages
+  app.get('/api/conversations/recent', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conversations = await storage.getConversationsByUserId(req.user.id);
+      
+      if (conversations.length === 0) {
+        return res.status(404).json({ message: 'No conversations found' });
+      }
+      
+      // Get the most recent conversation
+      const recentConversation = conversations.sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })[0];
+      
+      // Get messages for this conversation
+      const messages = await storage.getMessagesByConversationId(recentConversation.id);
+      
+      return res.status(200).json({
+        conversation: recentConversation,
+        messages
+      });
+    } catch (error) {
+      console.error('Get recent conversation error:', error);
+      return res.status(500).json({ message: 'Failed to get recent conversation' });
+    }
+  });
+  
+  // Get messages for a conversation
+  app.get('/api/conversations/:id/messages', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation ID' });
+      }
+      
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const messages = await storage.getMessagesByConversationId(conversationId);
+      
+      return res.status(200).json(messages);
+    } catch (error) {
+      console.error('Get messages error:', error);
+      return res.status(500).json({ message: 'Failed to get messages' });
+    }
+  });
+  
+  // MESSAGE ROUTES
+  
+  // Create a new message
+  app.post('/api/messages', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { conversationId, content, audioUrl, isUserMessage } = req.body;
+      
+      if (!conversationId || !content) {
+        return res.status(400).json({ message: 'Conversation ID and content are required' });
+      }
+      
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const newMessage = await storage.createMessage({
+        conversationId,
+        content,
+        audioUrl,
+        isUserMessage: isUserMessage === undefined ? true : isUserMessage
+      });
+      
+      return res.status(201).json(newMessage);
+    } catch (error) {
+      console.error('Create message error:', error);
+      return res.status(500).json({ message: 'Failed to create message' });
+    }
+  });
+  
+  // AI INTEGRATION ROUTES
+  
+  // Speech to text conversion
+  app.post('/api/speech-to-text', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { audio } = req.body;
+      
+      if (!audio) {
+        return res.status(400).json({ message: 'Audio data is required' });
+      }
+      
+      // Transcribe audio using Deepgram
+      const transcription = await transcribeAudio(audio);
+      
+      return res.status(200).json(transcription);
+    } catch (error) {
+      console.error('Speech to text error:', error);
+      return res.status(500).json({ message: 'Failed to convert speech to text' });
+    }
+  });
+  
+  // Text to speech conversion
+  app.post('/api/text-to-speech', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { text, voice, mood, voiceId } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ message: 'Text is required' });
+      }
+      
+      // Convert text to speech using ElevenLabs
+      const audioBuffer = await textToSpeech({ 
+        text, 
+        voice: voice || 'female', 
+        mood: mood || 'chill',
+        voiceId
+      });
+      
+      // Save audio file
+      const filename = generateFilename('tts', 'mp3');
+      const filePath = await saveBufferToFile(audioBuffer, filename);
+      
+      // Get the relative URL path
+      const audioUrl = `/uploads/${filename}`;
+      
+      return res.status(200).json({ audioUrl });
+    } catch (error) {
+      console.error('Text to speech error:', error);
+      return res.status(500).json({ message: 'Failed to convert text to speech' });
+    }
+  });
+  
+  // OpenAI chat
+  app.post('/api/chat', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { message, conversationId, personaMood } = req.body;
+      
+      if (!message || !conversationId) {
+        return res.status(400).json({ message: 'Message and conversation ID are required' });
+      }
+      
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      // Get conversation messages for context
+      const messages = await storage.getMessagesByConversationId(conversationId);
+      
+      // Get AI response
+      const aiResponseText = await getAIResponse(message, conversation, messages, personaMood);
+      
+      return res.status(200).json({ text: aiResponseText });
+    } catch (error) {
+      console.error('Chat error:', error);
+      return res.status(500).json({ message: 'Failed to get AI response' });
+    }
+  });
+  
+  // Serve uploaded files
+  app.use('/uploads', async (req, res, next) => {
+    // Check for directory existence
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    
+    try {
+      await fs.access(uploadsDir);
+    } catch (error) {
+      await fs.mkdir(uploadsDir, { recursive: true });
+    }
+    
+    next();
+  }, (req, res, next) => {
+    // Serve static files from the uploads directory
+    express.static(path.join(process.cwd(), 'uploads'))(req, res, next);
+  });
+  
+  const httpServer = createServer(app);
+  
+  return httpServer;
+}

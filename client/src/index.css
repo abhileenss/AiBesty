@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 20 14.3% 4.1%;
+  --muted: 60 4.8% 95.9%;
+  --muted-foreground: 25 5.3% 44.7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 14.3% 4.1%;
+  --card: 0 0% 100%;
+  --card-foreground: 20 14.3% 4.1%;
+  --border: 20 5.9% 90%;
+  --input: 20 5.9% 90%;
+  --primary: 248 82% 69%; /* Updated for AI Besty purple #6C63FF */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 172 78% 59%; /* Updated for AI Besty teal #4ECDC4 */
+  --secondary-foreground: 0 0% 100%;
+  --accent: 60 4.8% 95.9%;
+  --accent-foreground: 24 9.8% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 60 9.1% 97.8%;
+  --ring: 248 82% 69%;
+  --radius: 0.5rem;
+  
+  /* Custom colors for AI Besty */
+  --accent-red: 0 100% 71%; /* #FF6B6B */
+  --accent-yellow: 50 100% 71%; /* #FFE66D */
+  --accent-teal: 186 54% 23%; /* #1A535C */
+  --neutral-bg: 0 0% 97%; /* #F7F7F7 */
+  --neutral-text: 0 0% 20%; /* #333333 */
+  --neutral-border: 0 0% 88%; /* #E0E0E0 */
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --primary: 248 82% 69%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 172 78% 59%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --ring: 248 82% 69%;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-inter antialiased bg-neutral-bg text-neutral-text;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-poppins font-semibold;
+  }
+}
+
+@layer components {
+  .circle-ripple {
+    @apply relative;
+  }
+  
+  .circle-ripple::before {
+    content: "";
+    @apply absolute inset-0 rounded-full opacity-70;
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.7);
+    animation: ripple 2s infinite;
+  }
+  
+  @keyframes ripple {
+    0% {
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0.7);
+    }
+    70% {
+      box-shadow: 0 0 0 40px hsl(var(--primary) / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+    }
+  }
+  
+  .audio-wave {
+    @apply flex items-center justify-center h-10 gap-[3px];
+  }
+  
+  .audio-wave div {
+    @apply w-[3px] h-full bg-primary rounded-2xl;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+  
+  .audio-wave div:nth-child(2) { animation-delay: 0.1s; }
+  .audio-wave div:nth-child(3) { animation-delay: 0.2s; }
+  .audio-wave div:nth-child(4) { animation-delay: 0.3s; }
+  .audio-wave div:nth-child(5) { animation-delay: 0.4s; }
+  .audio-wave div:nth-child(6) { animation-delay: 0.5s; }
+  .audio-wave div:nth-child(7) { animation-delay: 0.6s; }
+  
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+  }
+}
