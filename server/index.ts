@@ -89,8 +89,9 @@ app.use((req, res, next) => {
     next();
   };
 
-  // Create basic HTTP server
-  const server = require('http').createServer(app);
+  // Create basic HTTP server using import instead of require
+  const http = await import('http');
+  const server = http.createServer(app);
   
   // Basic health check endpoint
   app.get('/api/health', (req, res) => {
