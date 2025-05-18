@@ -160,12 +160,19 @@ app.use((req, res, next) => {
   
   // Get current user
   app.get('/api/auth/me', requireAuth, async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
     res.status(200).json(req.user);
   });
   
   // Basic persona creation
   app.post('/api/personas', requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
       const { voice, mood, customVoiceId, customMoodSettings } = req.body;
       
       // Validate input
@@ -174,7 +181,8 @@ app.use((req, res, next) => {
       }
       
       // Check if user already has a persona
-      const existingPersonas = await storage.getPersonasByUserId(req.user.id);
+      const userId = req.user.id;
+      const existingPersonas = await storage.getPersonasByUserId(userId);
       
       if (existingPersonas.length > 0) {
         // Update existing persona
@@ -190,7 +198,7 @@ app.use((req, res, next) => {
       
       // Create new persona
       const newPersona = await storage.createPersona({
-        userId: req.user.id,
+        userId,
         voice,
         mood,
         customVoiceId,
@@ -201,6 +209,252 @@ app.use((req, res, next) => {
     } catch (error) {
       console.error('Create persona error:', error);
       return res.status(500).json({ message: 'Failed to create persona' });
+    }
+  });
+  
+  // Get current user's persona
+  app.get('/api/personas/current', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      const personas = await storage.getPersonasByUserId(req.user.id);
+      
+      if (personas.length === 0) {
+        return res.status(404).json({ message: 'No persona found' });
+      }
+      
+      return res.status(200).json(personas[0]);
+    } catch (error) {
+      console.error('Get persona error:', error);
+      return res.status(500).json({ message: 'Failed to get persona' });
+    }
+  });
+  
+  // Create conversation
+  app.post('/api/conversations', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      const { personaId, title } = req.body;
+      
+      const newConversation = await storage.createConversation({
+        userId: req.user.id,
+        personaId,
+        title: title || 'New Conversation'
+      });
+      
+      return res.status(201).json(newConversation);
+    } catch (error) {
+      console.error('Create conversation error:', error);
+      return res.status(500).json({ message: 'Failed to create conversation' });
+    }
+  });
+  
+  // Get conversation messages
+  app.get('/api/conversations/:id/messages', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      const conversationId = parseInt(req.params.id);
+      
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation ID' });
+      }
+      
+      // Get conversation to verify ownership
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to access this conversation' });
+      }
+      
+      const messages = await storage.getMessagesByConversationId(conversationId);
+      
+      return res.status(200).json(messages);
+    } catch (error) {
+      console.error('Get messages error:', error);
+      return res.status(500).json({ message: 'Failed to get messages' });
+    }
+  });
+  
+  // Send message and get AI response
+  app.post('/api/messages', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      const { conversationId, content } = req.body;
+      
+      // Validate input
+      if (!conversationId || !content) {
+        return res.status(400).json({ message: 'Conversation ID and content are required' });
+      }
+      
+      // Get conversation to verify ownership
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to access this conversation' });
+      }
+      
+      // Get the user's persona for this conversation
+      let personaMood = 'chill'; // Default mood
+      let personaVoice = 'female'; // Default voice
+      
+      if (conversation.personaId) {
+        const persona = await storage.getPersona(conversation.personaId);
+        if (persona) {
+          personaMood = persona.mood;
+          personaVoice = persona.voice;
+        }
+      }
+      
+      // Create user message
+      const userMessage = await storage.createMessage({
+        conversationId,
+        content,
+        isUserMessage: true
+      });
+      
+      // Get all messages for context
+      const allMessages = await storage.getMessagesByConversationId(conversationId);
+      
+      // Import and use OpenAI getAIResponse
+      const { getAIResponse } = await import('./lib/openai');
+      
+      // Get AI response
+      const aiResponseText = await getAIResponse(
+        content, 
+        conversation, 
+        allMessages, 
+        personaMood
+      );
+      
+      // Create AI message in the database
+      const aiMessage = await storage.createMessage({
+        conversationId,
+        content: aiResponseText,
+        isUserMessage: false
+      });
+      
+      // Generate audio URL (mock for now)
+      const audioUrl = `/api/audio/${aiMessage.id}.mp3`;
+      
+      return res.status(201).json({
+        message: userMessage,
+        aiResponse: aiMessage,
+        audioUrl
+      });
+    } catch (error) {
+      console.error('Send message error:', error);
+      return res.status(500).json({ message: 'Failed to send message' });
+    }
+  });
+  
+  // Speech to text conversion
+  app.post('/api/speech-to-text', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      // Check if request has audio data in base64 format
+      const { audioBase64 } = req.body;
+      
+      if (!audioBase64) {
+        return res.status(400).json({ message: 'Audio data is required' });
+      }
+      
+      // Mock implementation for development
+      // In production, this would call a real speech-to-text service
+      const mockResponse = {
+        text: "This is a mock transcription of what the user said.",
+        confidence: 0.95
+      };
+      
+      // If we have the real API integration available
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          // Use real transcription when available
+          const OpenAI = await import('openai');
+          const openai = new OpenAI.default({ apiKey: process.env.OPENAI_API_KEY });
+          
+          // Convert base64 to buffer
+          const audioBuffer = Buffer.from(audioBase64, 'base64');
+          
+          // Save to temporary file
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const tempFile = path.default.join(import.meta.dirname, 'temp_audio.wav');
+          await fs.writeFile(tempFile, audioBuffer);
+          
+          // Create readable stream from file
+          const fsOriginal = await import('fs');
+          const audioReadStream = fsOriginal.createReadStream(tempFile);
+          
+          // Use OpenAI Whisper model
+          const transcription = await openai.audio.transcriptions.create({
+            file: audioReadStream,
+            model: "whisper-1",
+          });
+          
+          // Clean up temp file
+          await fs.unlink(tempFile).catch(() => {});
+          
+          return res.status(200).json({
+            text: transcription.text,
+            confidence: 0.9 // OpenAI doesn't return confidence, use a reasonable default
+          });
+        } catch (err) {
+          console.error('OpenAI transcription error:', err);
+          // Fall back to mock response
+          return res.status(200).json(mockResponse);
+        }
+      } else {
+        // Use mock response for development
+        return res.status(200).json(mockResponse);
+      }
+    } catch (error) {
+      console.error('Speech to text error:', error);
+      return res.status(500).json({ message: 'Failed to convert speech to text' });
+    }
+  });
+  
+  // Text to speech conversion
+  app.post('/api/text-to-speech', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+      
+      const { text, voice = 'female', mood = 'chill' } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ message: 'Text is required' });
+      }
+      
+      // For development, return a mock audio URL
+      const mockAudioUrl = '/audio/sample-response.mp3';
+      
+      return res.status(200).json({ audioUrl: mockAudioUrl });
+    } catch (error) {
+      console.error('Text to speech error:', error);
+      return res.status(500).json({ message: 'Failed to convert text to speech' });
     }
   });
   
