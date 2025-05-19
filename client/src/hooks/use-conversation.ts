@@ -180,13 +180,16 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
     if (!conversation || !persona) return;
     
     try {
+      console.log("Stopping recording and processing voice input...");
       setIsListening(false);
       setIsProcessing(true);
       
       // Stop recording and get audio blob
       const audioBlob = await audioRecorderRef.current.stop();
+      console.log("Audio recording stopped, blob size:", audioBlob.size);
       
       // Convert speech to text
+      console.log("Sending audio for transcription...");
       const transcription = await speechToText({ audioBlob });
       
       if (!transcription.text.trim()) {

@@ -451,6 +451,11 @@ app.use((req, res, next) => {
             return res.json(mockResponse);
           }
           
+          console.log("Audio data received, processing speech-to-text...");
+          // Log the size of the audio data for debugging
+          console.log("Audio data size:", audio.length);
+          
+          
           // Parse base64 data (remove data URL prefix if present)
           let audioBase64 = audio;
           if (audio.includes(',')) {

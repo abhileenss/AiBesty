@@ -6,10 +6,15 @@ import type { SpeechToTextRequest, SpeechToTextResponse } from "./types";
  */
 export async function speechToText(request: SpeechToTextRequest): Promise<SpeechToTextResponse> {
   try {
+    console.log("Starting speech-to-text conversion...");
+    console.log("Audio blob size:", request.audioBlob.size);
+    
     // Convert audio blob to base64
     const base64Audio = await blobToBase64(request.audioBlob);
+    console.log("Converted audio to base64, length:", base64Audio.length);
     
     // Send to backend
+    console.log("Sending audio to server for transcription...");
     const response = await fetch('/api/speech-to-text', {
       method: 'POST',
       headers: {
@@ -21,10 +26,13 @@ export async function speechToText(request: SpeechToTextRequest): Promise<Speech
     
     if (!response.ok) {
       const error = await response.text();
+      console.error("Speech-to-text API error:", error);
       throw new Error(`Speech to text failed: ${error}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log("Transcription result:", result);
+    return result;
   } catch (error) {
     console.error("Speech to text error:", error);
     throw error;
