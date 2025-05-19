@@ -77,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // AUTH ROUTES
   
-  // Login with email (send magic link)
+  // Login with email (auto-login for development)
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       const { email } = req.body;
@@ -96,14 +96,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate auth token
       const authToken = await storage.createAuthToken(email);
       
-      // Send magic link email
-      const emailSent = await sendMagicLinkEmail(email, authToken.token);
+      // For development: Show the token in console but also auto-login the user
+      console.log('=== AUTO LOGIN ENABLED (DEVELOPMENT MODE) ===');
+      console.log(`Email: ${email}`);
+      console.log(`Token: ${authToken.token}`);
+      console.log('==============================================');
       
-      if (!emailSent) {
-        return res.status(500).json({ success: false, message: 'Failed to send magic link email' });
-      }
+      // Set session directly without email verification
+      req.session.userId = user.id;
       
-      return res.status(200).json({ success: true, message: 'Magic link email sent' });
+      // Return token for client-side auto verification
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Auto login successful', 
+        token: authToken.token,
+        user: {
+          id: user.id,
+          email: user.email
+        }
+      });
     } catch (error) {
       console.error('Login error:', error);
       return res.status(500).json({ success: false, message: 'Internal server error' });

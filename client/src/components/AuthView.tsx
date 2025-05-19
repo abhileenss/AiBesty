@@ -32,15 +32,11 @@ export function AuthView({ onSuccess }: AuthViewProps) {
     
     setEmailError('');
     
-    // Send magic link
+    // Auto-login with email (no verification needed)
     const result = await sendMagicLink(email);
     if (result.success) {
-      // For testing: directly use the token that's returned in development
-      if (result.token) {
-        setToken(result.token);
-      } else {
-        onSuccess();
-      }
+      // Auto-proceed to the app
+      onSuccess();
     }
   };
   

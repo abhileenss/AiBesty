@@ -33,7 +33,7 @@ export function useAuth() {
     checkAuth();
   }, []);
 
-  // Send magic link email
+  // Auto-login with email (no verification needed)
   const sendMagicLink = async (email: string): Promise<{ success: boolean, token?: string }> => {
     if (!isValidEmail(email)) {
       toast({
@@ -63,15 +63,19 @@ export function useAuth() {
         throw new Error(data.message || 'Authentication failed');
       }
       
+      // Auto-login successful, update user state
+      if (data.user) {
+        setUser(data.user);
+      }
+      
       toast({
-        title: "Magic link sent",
-        description: "Use the token below for direct login during testing"
+        title: "Login successful",
+        description: "You're now logged in to AI Besty!"
       });
       
+      // Auto-verify - no token needed
       return { 
-        success: true,
-        // For development testing, use the token that's returned directly
-        token: data.token
+        success: true 
       };
     } catch (error) {
       toast({
