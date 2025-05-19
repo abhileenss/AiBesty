@@ -427,6 +427,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OpenAI chat
   app.post('/api/chat', requireAuth, async (req: Request, res: Response) => {
     try {
+      // Make sure we're returning JSON content type
+      res.setHeader('Content-Type', 'application/json');
+      
       const { message, conversationId, personaMood } = req.body;
       
       if (!message || !conversationId) {
@@ -446,13 +449,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get conversation messages for context
       const messages = await storage.getMessagesByConversationId(conversationId);
       
-      // Get AI response
-      const aiResponseText = await getAIResponse(message, conversation, messages, personaMood);
-      
-      return res.status(200).json({ text: aiResponseText });
+      try {
+        // Get AI response
+        const aiResponseText = await getAIResponse(message, conversation, messages, personaMood);
+        
+        // Save the AI response as a message
+        await storage.createMessage({
+          conversationId,
+          content: aiResponseText,
+          isUserMessage: false
+        });
+        
+        // Return a valid JSON object
+        return res.status(200).json({ 
+          text: aiResponseText,
+          success: true
+        });
+      } catch (aiError) {
+        console.error('AI response generation error:', aiError);
+        // Return a valid JSON error object
+        return res.status(500).json({ 
+          message: 'Failed to generate AI response',
+          success: false,
+          error: aiError.message
+        });
+      }
     } catch (error) {
       console.error('Chat error:', error);
-      return res.status(500).json({ message: 'Failed to get AI response' });
+      // Ensure we always return valid JSON
+      return res.status(500).json({ 
+        message: 'Failed to process chat request',
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
   
