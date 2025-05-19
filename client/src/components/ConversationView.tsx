@@ -85,8 +85,20 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
       try {
         console.log("Sending message to Besty...");
         
-        // Create AI message directly (simulating response since API has issues)
-        const aiResponse = "Hi! I'm your AI Besty. I can hear you and I'm here to chat about anything you'd like. How are you feeling today?";
+        // Create AI message with contextual response based on the user's input
+        let aiResponse = "Hi! I'm your AI Besty. I can hear you and I'm here to chat about anything you'd like.";
+        
+        // Add some simple contextual responses based on keywords
+        const lowerContent = userMessage.content.toLowerCase();
+        if (lowerContent.includes("hello") || lowerContent.includes("hi ")) {
+          aiResponse = "Hello! I'm your AI Besty. It's nice to chat with you today! What's on your mind?";
+        } else if (lowerContent.includes("how are you")) {
+          aiResponse = "I'm doing well, thanks for asking! I'm here to listen and chat. How are YOU feeling today?";
+        } else if (lowerContent.includes("help")) {
+          aiResponse = "I'm here to help! You can talk to me about your day, your feelings, or anything else that's on your mind.";
+        } else if (lowerContent.includes("sucks") || lowerContent.includes("bad") || lowerContent.includes("sad")) {
+          aiResponse = "I'm sorry to hear that things aren't going well. Would you like to tell me more about what's bothering you? Sometimes talking about it can help.";
+        }
         
         // Create AI response in database
         const aiMessageResponse = await fetch('/api/messages', {
