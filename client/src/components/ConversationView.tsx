@@ -21,6 +21,9 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
   const [textMessage, setTextMessage] = useState('');
   const { toast } = useToast();
   
+  // Add a separate state for manual live transcript display
+  const [currentTranscript, setCurrentTranscript] = useState("");
+  
   const { 
     messages,
     conversation,
@@ -119,6 +122,51 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     }
   };
   
+  // Function to handle speech recognition in real-time
+  const startSpeechRecognition = () => {
+    // Use browser's SpeechRecognition API for live transcription
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        
+        setCurrentTranscript(transcript);
+      };
+      
+      recognition.start();
+      return recognition;
+    }
+    
+    return null;
+  };
+  
+  // State to track speech recognition instance
+  const [recognition, setRecognition] = useState<any>(null);
+  
+  // Start listening with live transcription
+  const handleStartListening = () => {
+    const recognitionInstance = startSpeechRecognition();
+    setRecognition(recognitionInstance);
+    toggleListening();
+  };
+  
+  // Stop listening and clean up
+  const handleStopListening = () => {
+    if (recognition) {
+      recognition.stop();
+      setRecognition(null);
+    }
+    toggleListening();
+  };
+  
   const renderMicIcon = () => {
     if (isListening) {
       return <StopCircle className="text-white text-6xl" />;
@@ -177,7 +225,7 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
                 size="xl"
                 ripple={!isListening}
                 pulsing={isListening}
-                onClick={toggleListening}
+                onClick={isListening ? handleStopListening : handleStartListening}
                 disabled={isProcessing || isResponding}
                 icon={renderMicIcon()}
                 aria-label={isListening ? "Stop listening" : "Start talking"}
@@ -199,7 +247,7 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
           {isListening && (
             <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100 max-w-md mx-auto">
               <p className="text-sm text-blue-800 font-medium">
-                {liveTranscript || "Listening..."}
+                {currentTranscript || "Listening..."}
               </p>
             </div>
           )}

@@ -164,8 +164,12 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
   // Start listening for user input
   const startListening = async () => {
     try {
-      await audioRecorderRef.current.start();
+      // Pass a callback to receive live transcription updates
+      await audioRecorderRef.current.start((text) => {
+        setLiveTranscript(text); // Update the live transcript state
+      });
       setIsListening(true);
+      setLiveTranscript(''); // Clear any previous transcript
     } catch (error) {
       console.error("Start listening error:", error);
       toast({
