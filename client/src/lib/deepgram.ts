@@ -46,9 +46,13 @@ export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
   private stream: MediaStream | null = null;
+  private liveTranscriptionCallback: ((text: string) => void) | null = null;
+  private transcriptionInterval: number | null = null;
   
-  async start(): Promise<void> {
+  async start(onLiveTranscription?: (text: string) => void): Promise<void> {
     try {
+      this.liveTranscriptionCallback = onLiveTranscription || null;
+      
       // Request microphone access
       this.stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -77,6 +81,42 @@ export class AudioRecorder {
       
       // Start recording with small timeslice to get chunks more frequently
       this.mediaRecorder.start(100); // Get data every 100ms
+      
+      // Set up live transcription if callback provided
+      if (this.liveTranscriptionCallback) {
+        // Every 2 seconds, send the current audio for real-time transcription
+        this.transcriptionInterval = window.setInterval(async () => {
+          if (this.audioChunks.length > 0) {
+            try {
+              // Create a blob from current chunks for interim transcription
+              const currentAudio = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+              
+              // Don't send if too small
+              if (currentAudio.size < 1000) return;
+              
+              // Convert to base64 and send for transcription
+              const base64Audio = await blobToBase64(currentAudio);
+              const response = await fetch('/api/speech-to-text', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ audio: base64Audio }),
+                credentials: 'include'
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                if (result.text && this.liveTranscriptionCallback) {
+                  this.liveTranscriptionCallback(result.text);
+                }
+              }
+            } catch (error) {
+              console.log("Live transcription error (non-fatal):", error);
+            }
+          }
+        }, 2000); // Update every 2 seconds
+      }
     } catch (error) {
       console.error("Failed to start recording:", error);
       throw new Error("Microphone access denied or not available");
@@ -88,6 +128,12 @@ export class AudioRecorder {
       if (!this.mediaRecorder) {
         reject(new Error("Recording has not started"));
         return;
+      }
+      
+      // Clean up live transcription interval if it exists
+      if (this.transcriptionInterval) {
+        window.clearInterval(this.transcriptionInterval);
+        this.transcriptionInterval = null;
       }
       
       this.mediaRecorder.onstop = async () => {

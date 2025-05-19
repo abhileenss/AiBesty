@@ -191,9 +191,19 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
           </>
         )}
         
-        {/* Status Text */}
+        {/* Status Text and Live Transcription */}
         <div className="mt-8 text-center">
           <p className="text-lg text-gray-600">{getStatusText()}</p>
+          
+          {/* Live Transcription - shows what you're saying in real-time */}
+          {isListening && (
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100 max-w-md mx-auto">
+              <p className="text-sm text-blue-800 font-medium">
+                {liveTranscript || "Listening..."}
+              </p>
+            </div>
+          )}
+          
           {(isListening || isResponding) && (
             <p className="mt-2 text-sm text-primary">
               Besty is feeling <span>{persona.mood}</span> today

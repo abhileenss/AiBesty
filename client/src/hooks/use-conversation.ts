@@ -24,6 +24,7 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   
   const audioRecorderRef = useRef<AudioRecorder>(new AudioRecorder());
