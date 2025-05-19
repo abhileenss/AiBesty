@@ -93,23 +93,40 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
           credentials: 'include'
         });
         
-        if (chatResponse.ok) {
-          // Update messages by refetching them
-          const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
-            credentials: 'include'
-          });
-          
-          if (messagesResponse.ok) {
-            const newMessages = await messagesResponse.json();
-            // Don't use window.location.reload() to avoid full page refresh
-            toast({
-              title: "Besty replied",
-              description: "Check out Besty's response!",
+        // First check if the response is valid JSON
+        const contentType = chatResponse.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          if (chatResponse.ok) {
+            // Update messages by refetching them
+            const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
+              credentials: 'include'
             });
+            
+            if (messagesResponse.ok) {
+              const newMessages = await messagesResponse.json();
+              // Don't use window.location.reload() to avoid full page refresh
+              toast({
+                title: "Besty replied",
+                description: "Check out Besty's response!",
+              });
+            }
+          } else {
+            const errorData = await chatResponse.json();
+            throw new Error(errorData.message || 'Error getting AI response');
           }
+        } else {
+          // Handle non-JSON response (likely HTML error page)
+          const text = await chatResponse.text();
+          console.error("Received non-JSON response:", text.substring(0, 100) + "...");
+          throw new Error("Server returned invalid response format");
         }
       } catch (chatError) {
         console.error("Failed to get AI response:", chatError);
+        toast({
+          title: "Conversation error",
+          description: chatError instanceof Error ? chatError.message : "Failed to get AI response",
+          variant: "destructive"
+        });
       }
       
     } catch (error) {
@@ -124,7 +141,8 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
   
   // Function to handle speech recognition in real-time
   const startSpeechRecognition = () => {
-    // Use browser's SpeechRecognition API for live transcription
+    // Create a compatible type for SpeechRecognition
+    // @ts-ignore - these browser APIs might not be in the TypeScript definitions
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (SpeechRecognition) {
@@ -133,9 +151,10 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
       recognition.interimResults = true;
       recognition.lang = 'en-US';
       
-      recognition.onresult = (event) => {
+      recognition.onresult = (event: any) => {
+        // Get the transcript from the speech recognition results
         const transcript = Array.from(event.results)
-          .map(result => result[0].transcript)
+          .map((result: any) => result[0].transcript)
           .join('');
         
         setCurrentTranscript(transcript);
