@@ -1,52 +1,45 @@
 /**
- * Transcribe audio using Deepgram API (mock implementation for development)
+ * Transcribe audio using Deepgram API with a direct HTTP request
+ * instead of using the SDK to avoid version compatibility issues
  */
+import fetch from 'node-fetch';
+
 export async function transcribeAudio(audioBase64: string): Promise<{ text: string, confidence: number }> {
   try {
-    // For development, we're using a mock implementation
-    // This prevents errors from the Deepgram SDK during development
-    console.log('Transcribing audio with mock implementation');
-    
-    // In a real implementation, we would call Deepgram's API
-    // For now we're just returning a mock response
-    return {
-      text: "This is a simulated transcription. In production, we would use the Deepgram API.",
-      confidence: 0.95
-    };
-    
-    // When you have a Deepgram API key, uncomment and use the implementation below:
-    /*
-    import { createClient } from '@deepgram/sdk';
-    
+    // Check for API key
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     if (!deepgramApiKey) {
       throw new Error('DEEPGRAM_API_KEY environment variable is not set');
     }
     
-    const deepgram = createClient(deepgramApiKey);
+    console.log('Audio data received, processing speech-to-text...');
+    console.log('Audio data size:', audioBase64.length);
     
     // Convert base64 to buffer
     const audioBinary = Buffer.from(audioBase64, 'base64');
     
-    const response = await deepgram.listen.prerecorded.transcribe({
-      buffer: audioBinary,
-      mimetype: 'audio/webm',
-      options: {
-        smart_format: true,
-        model: 'general',
-        language: 'en-US',
-      }
+    // Make direct API request to Deepgram
+    const response = await fetch('https://api.deepgram.com/v1/listen?smart_format=true&model=nova-2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${deepgramApiKey}`,
+        'Content-Type': 'audio/webm',
+      },
+      body: audioBinary
     });
     
-    if (!response || !response.results) {
-      throw new Error('Failed to transcribe audio: No response returned');
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Deepgram API error: ${response.status} ${errorText}`);
     }
     
-    const transcript = response.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-    const confidence = response.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
+    const result = await response.json();
+    
+    // Extract transcript and confidence
+    const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+    const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
     
     return { text: transcript, confidence };
-    */
   } catch (error) {
     console.error('Deepgram API error:', error);
     throw new Error('Failed to transcribe audio');

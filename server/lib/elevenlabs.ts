@@ -12,45 +12,63 @@ interface TTSOptions {
 }
 
 /**
- * Convert text to speech (mock implementation for development)
- * 
- * This is a simplified version that returns a sample audio file
- * instead of making actual API calls to ElevenLabs
+ * Convert text to speech using ElevenLabs API
  */
 export async function textToSpeech(options: TTSOptions): Promise<Buffer> {
   try {
-    console.log('Text to speech with mock implementation', {
-      text: options.text,
-      voice: options.voice,
-      mood: options.mood
-    });
-    
-    // For development, we'll use a sample MP3 file
-    // In production, this would call the ElevenLabs API
-    const sampleAudioPath = path.join(process.cwd(), 'sample_audio.mp3');
-    
-    try {
-      // Check if the sample file exists
-      await fs.access(sampleAudioPath);
-    } catch (err) {
-      // If sample file doesn't exist, create an empty one
-      await fs.writeFile(sampleAudioPath, Buffer.from(''));
-    }
-    
-    // Return empty buffer in development
-    return Buffer.from('');
-    
-    // In a real implementation, you would use code like this:
-    /*
-    import fetch from 'node-fetch';
-    
+    // Check for API key
     const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
     if (!ELEVENLABS_API_KEY) {
       throw new Error('ELEVENLABS_API_KEY environment variable is not set');
     }
     
-    // Voice IDs and request to ElevenLabs API would go here
-    */
+    console.log('Converting text to speech with ElevenLabs', {
+      textLength: options.text.length,
+      voice: options.voice,
+      mood: options.mood
+    });
+    
+    // Select voice ID based on voice type
+    let voiceId = options.voiceId;
+    if (!voiceId) {
+      // Default voice IDs from ElevenLabs
+      if (options.voice === 'female') {
+        voiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel voice
+      } else if (options.voice === 'male') {
+        voiceId = 'TxGEqnHWrfWFTfGW9XjX'; // Josh voice
+      } else {
+        // Default to female voice if not specified
+        voiceId = '21m00Tcm4TlvDq8ikWAM';
+      }
+    }
+
+    // Make request to ElevenLabs API
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY
+      },
+      body: JSON.stringify({
+        text: options.text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('ElevenLabs API error:', errorText);
+      throw new Error(`ElevenLabs API returned ${response.status}: ${errorText}`);
+    }
+
+    // Get audio buffer
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   } catch (error) {
     console.error('TTS error:', error);
     throw new Error('Failed to convert text to speech');
