@@ -15,6 +15,7 @@ export interface AuthResponse {
   success: boolean;
   message: string;
   token?: string; // For development testing only
+  user?: User;
 }
 
 export interface VerifyTokenRequest {

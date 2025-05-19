@@ -53,14 +53,8 @@ export default function Home() {
     }
   };
   
-  // Handle auth success
-  const handleAuthSuccess = (email: string) => {
-    setUserEmail(email);
-    setCurrentView('verification');
-  };
-  
-  // Handle verification success
-  const handleVerified = () => {
+  // Handle auth success - skip verification and go straight to persona selection
+  const handleAuthSuccess = () => {
     setCurrentView('persona');
   };
   
@@ -103,16 +97,10 @@ export default function Home() {
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center relative px-4">
         {currentView === 'auth' && (
-          <AuthView onSuccess={() => handleAuthSuccess(userEmail)} />
+          <AuthView onSuccess={handleAuthSuccess} />
         )}
         
-        {currentView === 'verification' && (
-          <VerificationView 
-            email={userEmail} 
-            onVerified={handleVerified}
-            onResend={() => {}}
-          />
-        )}
+        {/* Verification view removed - we're doing auto-login now */}
         
         {currentView === 'persona' && (
           <PersonaConfigView onComplete={handlePersonaSelected} />
