@@ -107,7 +107,7 @@ app.use((req, res, next) => {
     res.json({ status: 'ok', version: '1.0.0' });
   });
   
-  // Login with email (send magic link)
+  // Login with email (auto-login for development)
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       const { email } = req.body;
@@ -123,18 +123,27 @@ app.use((req, res, next) => {
         user = await storage.createUser({ email });
       }
       
-      // Generate mock auth token - in production this would send an email
+      // Generate auth token
       const authToken = await storage.createAuthToken(email);
       
-      // Log token for testing
-      console.log('=== MAGIC LINK TOKEN (for testing) ===');
-      console.log(`Token: ${authToken.token}`);
-      console.log('======================================');
+      // Auto-login: set session directly
+      req.session.userId = user.id;
+      
+      // Log info for development
+      console.log('=== AUTO-LOGIN SUCCESSFUL ===');
+      console.log(`Email: ${email}`);
+      console.log(`User ID: ${user.id}`);
+      console.log('=============================');
       
       return res.status(200).json({ 
         success: true, 
-        message: 'Magic link email sent (check server logs for token)',
-        token: authToken.token // For direct testing in development
+        message: 'Login successful - auto-login enabled',
+        user: {
+          id: user.id,
+          email: user.email,
+          emailVerified: true, // Auto-verify email
+          createdAt: user.createdAt
+        }
       });
     } catch (error) {
       console.error('Login error:', error);
