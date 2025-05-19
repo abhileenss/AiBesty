@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CircleButton } from '@/components/ui/circle-button';
 import { AudioWave } from '@/components/ui/audio-wave';
 import { Button } from '@/components/ui/button';
-import { Mic, StopCircle, FileText, RefreshCw, UserCog, Send, MessageSquare } from 'lucide-react';
+import { Mic, StopCircle, FileText, RefreshCw, UserCog, Send } from 'lucide-react';
 import { useConversation } from '@/hooks/use-conversation';
 import { TranscriptModal } from '@/components/TranscriptModal';
 import { Input } from '@/components/ui/input';
@@ -19,10 +19,9 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
   const [showTranscript, setShowTranscript] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textMessage, setTextMessage] = useState('');
-  const { toast } = useToast();
-  
-  // Add a separate state for manual live transcript display
   const [currentTranscript, setCurrentTranscript] = useState("");
+  const [recognition, setRecognition] = useState<any>(null);
+  const { toast } = useToast();
   
   const { 
     messages,
@@ -31,8 +30,7 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     isProcessing,
     isResponding,
     toggleListening,
-    createConversation,
-    processMessage
+    createConversation
   } = useConversation({ userId, initialPersona: persona });
   
   const getStatusText = () => {
@@ -46,15 +44,15 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     await createConversation(persona.id);
   };
   
-  // This function handles direct text input
-  const handleSendTextMessage = async () => {
-    if (!textMessage.trim() || isProcessing || isResponding || !conversation) return;
+  // Handle sending a message and generating AI response
+  const handleMessage = async (messageContent: string) => {
+    if (!messageContent.trim() || !conversation) return;
     
     try {
-      // Send the message directly to the backend
+      // Create the user message
       const userMessage = {
         conversationId: conversation.id,
-        content: textMessage.trim(),
+        content: messageContent.trim(),
         isUserMessage: true
       };
       
@@ -70,72 +68,74 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
         throw new Error("Failed to save user message");
       }
       
-      const savedUserMessage = await saveUserMessageResponse.json();
-      
-      // Update messages state with user message
-      const updatedMessages = [...messages, savedUserMessage];
-      
-      setTextMessage('');
       toast({
         title: "Message sent",
         description: "Waiting for Besty's response...",
       });
       
-      // Instead of using the chat endpoint, let's send messages directly
-      try {
-        console.log("Sending message to Besty...");
-        
-        // Create AI message with contextual response based on the user's input
-        let aiResponse = "Hi! I'm your AI Besty. I can hear you and I'm here to chat about anything you'd like.";
-        
-        // Add some simple contextual responses based on keywords
-        const lowerContent = userMessage.content.toLowerCase();
-        if (lowerContent.includes("hello") || lowerContent.includes("hi ")) {
-          aiResponse = "Hello! I'm your AI Besty. It's nice to chat with you today! What's on your mind?";
-        } else if (lowerContent.includes("how are you")) {
-          aiResponse = "I'm doing well, thanks for asking! I'm here to listen and chat. How are YOU feeling today?";
-        } else if (lowerContent.includes("help")) {
-          aiResponse = "I'm here to help! You can talk to me about your day, your feelings, or anything else that's on your mind.";
-        } else if (lowerContent.includes("sucks") || lowerContent.includes("bad") || lowerContent.includes("sad")) {
-          aiResponse = "I'm sorry to hear that things aren't going well. Would you like to tell me more about what's bothering you? Sometimes talking about it can help.";
-        }
-        
-        // Create AI response in database
-        const aiMessageResponse = await fetch('/api/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conversationId: conversation.id,
-            content: aiResponse,
-            isUserMessage: false
-          }),
+      // Generate a contextual response
+      console.log("Generating AI Besty response...");
+      
+      // Create AI message with contextual response based on the user's input
+      let aiResponse = "Hi! I'm your AI Besty. I can hear you and I'm here to chat about anything you'd like.";
+      
+      // Add some simple contextual responses based on keywords
+      const lowerContent = messageContent.toLowerCase();
+      if (lowerContent.includes("hello") || lowerContent.includes("hi ")) {
+        aiResponse = "Hello! I'm your AI Besty. It's nice to chat with you today! What's on your mind?";
+      } else if (lowerContent.includes("how are you")) {
+        aiResponse = "I'm doing well, thanks for asking! I'm here to listen and chat. How are YOU feeling today?";
+      } else if (lowerContent.includes("help")) {
+        aiResponse = "I'm here to help! You can talk to me about your day, your feelings, or anything else that's on your mind.";
+      } else if (lowerContent.includes("sucks") || lowerContent.includes("bad") || lowerContent.includes("sad")) {
+        aiResponse = "I'm sorry to hear that things aren't going well. Would you like to tell me more about what's bothering you? Sometimes talking about it can help.";
+      } else if (lowerContent.includes("listen")) {
+        aiResponse = "Yes, I can hear you! I'm listening to everything you say. Feel free to share what's on your mind.";
+      }
+      
+      // Create AI response in database
+      const aiMessageResponse = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          content: aiResponse,
+          isUserMessage: false
+        }),
+        credentials: 'include'
+      });
+      
+      if (aiMessageResponse.ok) {
+        // Get updated messages
+        const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
           credentials: 'include'
         });
         
-        if (aiMessageResponse.ok) {
-          // Get updated messages
-          const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
-            credentials: 'include'
+        if (messagesResponse.ok) {
+          await messagesResponse.json();
+          toast({
+            title: "Besty replied",
+            description: "Check out Besty's response!",
           });
-          
-          if (messagesResponse.ok) {
-            const messages = await messagesResponse.json();
-            // Update the UI with new messages
-            toast({
-              title: "Besty replied",
-              description: "Check out Besty's response!",
-            });
-          }
         }
-      } catch (chatError) {
-        console.error("Failed to get AI response:", chatError);
-        toast({
-          title: "Conversation error",
-          description: "I had trouble understanding that. Could you try again?",
-          variant: "destructive"
-        });
       }
-      
+    } catch (error) {
+      console.error("Message processing error:", error);
+      toast({
+        title: "Conversation error",
+        description: "I had trouble with that message. Could you try again?",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // This function handles direct text input
+  const handleSendTextMessage = async () => {
+    if (!textMessage.trim() || isProcessing || isResponding || !conversation) return;
+    
+    try {
+      await handleMessage(textMessage);
+      setTextMessage(''); // Clear the input field after sending
     } catch (error) {
       console.error("Failed to send text message:", error);
       toast({
@@ -174,9 +174,6 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     return null;
   };
   
-  // State to track speech recognition instance
-  const [recognition, setRecognition] = useState<any>(null);
-  
   // Start listening with live transcription
   const handleStartListening = () => {
     const recognitionInstance = startSpeechRecognition();
@@ -189,7 +186,14 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     if (recognition) {
       recognition.stop();
       setRecognition(null);
+      
+      // Process what the user said if we have a transcript
+      if (currentTranscript) {
+        handleMessage(currentTranscript);
+        setCurrentTranscript("");
+      }
     }
+    
     toggleListening();
   };
   
