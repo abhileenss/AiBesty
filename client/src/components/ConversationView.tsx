@@ -20,7 +20,6 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
   const [showTextInput, setShowTextInput] = useState(false);
   const [textMessage, setTextMessage] = useState('');
   const [currentTranscript, setCurrentTranscript] = useState("");
-  const [recognition, setRecognition] = useState<any>(null);
   const { toast } = useToast();
   
   const { 
@@ -30,7 +29,9 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     isProcessing,
     isResponding,
     toggleListening,
-    createConversation
+    createConversation,
+    processMessage,
+    liveTranscript
   } = useConversation({ userId, initialPersona: persona });
   
   const getStatusText = () => {
@@ -49,76 +50,15 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     if (!messageContent.trim() || !conversation) return;
     
     try {
-      // Create the user message
-      const userMessage = {
-        conversationId: conversation.id,
-        content: messageContent.trim(),
-        isUserMessage: true
-      };
-      
-      // Save user message
-      const saveUserMessageResponse = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userMessage),
-        credentials: 'include'
-      });
-      
-      if (!saveUserMessageResponse.ok) {
-        throw new Error("Failed to save user message");
-      }
+      console.log("Processing message:", messageContent);
+      // Use the conversation hook's processMessage method which properly handles
+      // the complete flow from user message -> OpenAI -> ElevenLabs
+      await processMessage(messageContent);
       
       toast({
         title: "Message sent",
         description: "Waiting for Besty's response...",
       });
-      
-      // Generate a contextual response
-      console.log("Generating AI Besty response...");
-      
-      // Create AI message with contextual response based on the user's input
-      let aiResponse = "Hi! I'm your AI Besty. I can hear you and I'm here to chat about anything you'd like.";
-      
-      // Add some simple contextual responses based on keywords
-      const lowerContent = messageContent.toLowerCase();
-      if (lowerContent.includes("hello") || lowerContent.includes("hi ")) {
-        aiResponse = "Hello! I'm your AI Besty. It's nice to chat with you today! What's on your mind?";
-      } else if (lowerContent.includes("how are you")) {
-        aiResponse = "I'm doing well, thanks for asking! I'm here to listen and chat. How are YOU feeling today?";
-      } else if (lowerContent.includes("help")) {
-        aiResponse = "I'm here to help! You can talk to me about your day, your feelings, or anything else that's on your mind.";
-      } else if (lowerContent.includes("sucks") || lowerContent.includes("bad") || lowerContent.includes("sad")) {
-        aiResponse = "I'm sorry to hear that things aren't going well. Would you like to tell me more about what's bothering you? Sometimes talking about it can help.";
-      } else if (lowerContent.includes("listen")) {
-        aiResponse = "Yes, I can hear you! I'm listening to everything you say. Feel free to share what's on your mind.";
-      }
-      
-      // Create AI response in database
-      const aiMessageResponse = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          content: aiResponse,
-          isUserMessage: false
-        }),
-        credentials: 'include'
-      });
-      
-      if (aiMessageResponse.ok) {
-        // Get updated messages
-        const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`, {
-          credentials: 'include'
-        });
-        
-        if (messagesResponse.ok) {
-          await messagesResponse.json();
-          toast({
-            title: "Besty replied",
-            description: "Check out Besty's response!",
-          });
-        }
-      }
     } catch (error) {
       console.error("Message processing error:", error);
       toast({
@@ -146,54 +86,13 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
     }
   };
   
-  // Function to handle speech recognition in real-time
-  const startSpeechRecognition = () => {
-    // Create a compatible type for SpeechRecognition
-    // @ts-ignore - these browser APIs might not be in the TypeScript definitions
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      
-      recognition.onresult = (event: any) => {
-        // Get the transcript from the speech recognition results
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        
-        setCurrentTranscript(transcript);
-      };
-      
-      recognition.start();
-      return recognition;
-    }
-    
-    return null;
-  };
-  
-  // Start listening with live transcription
+  // Start listening to user voice input using the useConversation hook
   const handleStartListening = () => {
-    const recognitionInstance = startSpeechRecognition();
-    setRecognition(recognitionInstance);
     toggleListening();
   };
   
-  // Stop listening and clean up
+  // Stop listening and let the conversation hook handle processing
   const handleStopListening = () => {
-    if (recognition) {
-      recognition.stop();
-      setRecognition(null);
-      
-      // Process what the user said if we have a transcript
-      if (currentTranscript) {
-        handleMessage(currentTranscript);
-        setCurrentTranscript("");
-      }
-    }
-    
     toggleListening();
   };
   

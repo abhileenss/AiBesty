@@ -327,6 +327,7 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
     isProcessing,
     isResponding,
     error,
+    liveTranscript,
     toggleListening,
     processMessage,
     updatePersona,
