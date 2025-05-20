@@ -275,15 +275,29 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
       setMessages(prev => [...prev, savedAiMessage]);
       
       // Convert AI response to speech
-      const speechResponse = await textToSpeech({
+      console.log("Converting AI response to speech with ElevenLabs:", {
         text: aiResponse.text,
         voice: persona.voice,
-        mood: persona.mood,
-        voiceId: persona.customVoiceId
+        mood: persona.mood
       });
       
-      // Play the audio response
-      await audioPlayerRef.current.play(speechResponse.audioUrl);
+      try {
+        const speechResponse = await textToSpeech({
+          text: aiResponse.text,
+          voice: persona.voice,
+          mood: persona.mood,
+          voiceId: persona.customVoiceId
+        });
+        
+        console.log("ElevenLabs response received:", speechResponse);
+        
+        // Play the audio response
+        console.log("Playing audio from URL:", speechResponse.audioUrl);
+        await audioPlayerRef.current.play(speechResponse.audioUrl);
+      } catch (ttsError) {
+        console.error("Text-to-speech conversion failed:", ttsError);
+        throw new Error("Failed to convert AI response to speech");
+      }
     } catch (error) {
       console.error("Process message error:", error);
       setError("Failed to process message");
