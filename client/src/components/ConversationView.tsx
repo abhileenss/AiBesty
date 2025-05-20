@@ -19,7 +19,6 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
   const [showTranscript, setShowTranscript] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textMessage, setTextMessage] = useState('');
-  const [currentTranscript, setCurrentTranscript] = useState("");
   const { toast } = useToast();
   
   const { 
@@ -176,7 +175,7 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
           {isListening && (
             <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100 max-w-md mx-auto">
               <p className="text-sm text-blue-800 font-medium">
-                {currentTranscript || "Listening..."}
+                {liveTranscript || "Listening..."}
               </p>
             </div>
           )}

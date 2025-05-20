@@ -53,46 +53,76 @@ export class AudioRecorder {
     try {
       this.liveTranscriptionCallback = onLiveTranscription || null;
       
-      // Request microphone access
+      console.log("Requesting microphone access...");
+      
+      // Request microphone access with more compatible settings
       this.stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          channelCount: 1,
-          sampleRate: 16000 // Lower sample rate for smaller file size
+          channelCount: 1
         } 
       });
       
-      // Create media recorder with options for smaller file size
-      const options = { 
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 16000 // Lower bitrate for smaller file size
-      };
+      console.log("Microphone access granted, setting up recorder...");
+      
+      // Find a supported MIME type
+      const mimeTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus', 
+        'audio/mp4',
+        ''  // Empty string lets browser pick best format
+      ];
+      
+      let selectedMimeType = '';
+      for (const mimeType of mimeTypes) {
+        if (mimeType === '' || MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          break;
+        }
+      }
+      
+      console.log(`Using MIME type: ${selectedMimeType || 'browser default'}`);
+      
+      // Create media recorder with more compatible options
+      const options: MediaRecorderOptions = {};
+      if (selectedMimeType) {
+        options.mimeType = selectedMimeType;
+      }
       
       this.mediaRecorder = new MediaRecorder(this.stream, options);
       this.audioChunks = [];
       
-      // Set up event listeners and capture audio in smaller chunks
+      // Set up event listeners and capture audio in chunks
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
+          console.log(`Audio chunk captured: ${event.data.size} bytes`);
         }
       };
       
-      // Start recording with small timeslice to get chunks more frequently
-      this.mediaRecorder.start(100); // Get data every 100ms
+      // Start recording with small timeslice to get chunks
+      this.mediaRecorder.start(500); // Get data every 500ms
+      console.log("Recording started...");
       
       // Set up live transcription if callback provided
       if (this.liveTranscriptionCallback) {
+        console.log("Setting up live transcription...");
         // Every 2 seconds, send the current audio for real-time transcription
         this.transcriptionInterval = window.setInterval(async () => {
           if (this.audioChunks.length > 0) {
             try {
               // Create a blob from current chunks for interim transcription
-              const currentAudio = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+              const currentAudio = new Blob(this.audioChunks, { type: selectedMimeType || 'audio/webm' });
               
               // Don't send if too small
-              if (currentAudio.size < 1000) return;
+              if (currentAudio.size < 1000) {
+                console.log("Audio chunk too small, skipping live transcription");
+                return;
+              }
+              
+              console.log(`Sending ${currentAudio.size} bytes for live transcription`);
               
               // Convert to base64 and send for transcription
               const base64Audio = await blobToBase64(currentAudio);
@@ -107,9 +137,12 @@ export class AudioRecorder {
               
               if (response.ok) {
                 const result = await response.json();
+                console.log("Live transcription result:", result);
                 if (result.text && this.liveTranscriptionCallback) {
                   this.liveTranscriptionCallback(result.text);
                 }
+              } else {
+                console.error("Live transcription API error:", await response.text());
               }
             } catch (error) {
               console.log("Live transcription error (non-fatal):", error);
@@ -130,6 +163,8 @@ export class AudioRecorder {
         return;
       }
       
+      console.log("Stopping recording...");
+      
       // Clean up live transcription interval if it exists
       if (this.transcriptionInterval) {
         window.clearInterval(this.transcriptionInterval);
@@ -138,8 +173,14 @@ export class AudioRecorder {
       
       this.mediaRecorder.onstop = async () => {
         try {
-          // Create a single blob from all audio chunks with compressed format
-          const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+          console.log(`Captured ${this.audioChunks.length} audio chunks`);
+          
+          // Create a single blob from all audio chunks
+          const audioBlob = new Blob(this.audioChunks, { 
+            type: this.mediaRecorder?.mimeType || 'audio/webm' 
+          });
+          
+          console.log(`Final audio size: ${audioBlob.size} bytes`);
           
           // Clean up
           if (this.stream) {
@@ -147,13 +188,7 @@ export class AudioRecorder {
             this.stream = null;
           }
           
-          // For very large files, we can return a smaller segment
-          if (audioBlob.size > 500000) { // If > 500KB
-            console.log("Audio too large, using first 5 seconds only");
-            resolve(this.audioChunks[0]); // Use just the first chunk
-          } else {
-            resolve(audioBlob);
-          }
+          resolve(audioBlob);
         } catch (error) {
           console.error("Error processing audio:", error);
           reject(error);
