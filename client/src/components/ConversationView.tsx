@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Mic, StopCircle, FileText, RefreshCw, UserCog, Send } from 'lucide-react';
 import { useConversation } from '@/hooks/use-conversation';
 import { TranscriptModal } from '@/components/TranscriptModal';
+import { TestVoiceButton } from '@/components/TestVoiceButton';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { Persona } from '@/lib/types';
@@ -219,6 +220,11 @@ export function ConversationView({ userId, persona, onChangePersona }: Conversat
             <UserCog className="text-gray-600" />
           </Button>
         </div>
+      </div>
+      
+      {/* Test Voice Button */}
+      <div className="fixed bottom-4 right-4">
+        <TestVoiceButton />
       </div>
       
       {/* Transcript Modal */}
