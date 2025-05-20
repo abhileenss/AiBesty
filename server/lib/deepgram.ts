@@ -55,9 +55,10 @@ export async function transcribeAudio(audioBase64: string): Promise<{ text: stri
       const result = await response.json();
       console.log('Deepgram result:', JSON.stringify(result).substring(0, 200) + '...');
       
-      // Extract transcript and confidence with better error handling
-      const transcript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-      const confidence = result.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
+      // Extract transcript and confidence with proper type handling
+      const resultObj = result as any;
+      const transcript = resultObj.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+      const confidence = resultObj.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
       
       console.log(`Transcription: "${transcript}" (confidence: ${confidence})`);
       return { text: transcript, confidence };
