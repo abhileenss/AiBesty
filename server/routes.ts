@@ -414,6 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log('Text-to-speech request received:', { 
+        text: text.substring(0, 30) + '...',  // Log partial text for privacy
         textLength: text.length, 
         voice, 
         mood, 
@@ -431,34 +432,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       try {
         // Convert text to speech using ElevenLabs
-        console.log('Starting ElevenLabs API call...');
+        console.log('Starting ElevenLabs API call with newly provided key...');
         const audioBuffer = await textToSpeech({ 
           text, 
           voice: voice || 'female', 
           mood: mood || 'chill',
           voiceId
         });
-        console.log('ElevenLabs returned audio data, size:', audioBuffer.length);
+        
+        if (!audioBuffer || audioBuffer.length === 0) {
+          console.error('ElevenLabs returned empty audio buffer');
+          throw new Error('Empty audio buffer received from ElevenLabs');
+        }
+        
+        console.log('ElevenLabs returned audio data, size:', audioBuffer.length, 'bytes');
         
         // Save audio file
         const filename = generateFilename('tts', 'mp3');
         const filePath = await saveBufferToFile(audioBuffer, filename);
         console.log('Audio file saved at:', filePath);
         
+        // Verify file was created and has content
+        try {
+          const stats = await fs.stat(filePath);
+          console.log('Verified file exists with size:', stats.size, 'bytes');
+        } catch (statError) {
+          console.error('Error verifying file:', statError);
+        }
+        
         // Get the relative URL path
         const audioUrl = `/uploads/${filename}`;
         console.log('Returning audio URL:', audioUrl);
         
         return res.status(200).json({ audioUrl });
-      } catch (elevenlabsError) {
+      } catch (elevenlabsError: any) {
         console.error('ElevenLabs API error:', elevenlabsError);
-        throw new Error(`ElevenLabs API error: ${elevenlabsError.message}`);
+        
+        // Create a simple audio file with a beep sound as fallback
+        const fallbackFilename = generateFilename('fallback', 'mp3');
+        const fallbackPath = path.join(uploadsDir, fallbackFilename);
+        
+        // Check if we have a fallback audio file template
+        const templatePath = path.join(process.cwd(), 'assets', 'fallback.mp3');
+        try {
+          try {
+            const fallbackTemplate = await fs.readFile(templatePath);
+            await fs.writeFile(fallbackPath, fallbackTemplate);
+          } catch (templateError) {
+            // If no template exists, create a minimal file
+            const minimalBuffer = Buffer.from([
+              0x52, 0x49, 0x46, 0x46, 0x28, 0x00, 0x00, 0x00,
+              0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20,
+              0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+              0x44, 0xAC, 0x00, 0x00, 0x88, 0x58, 0x01, 0x00,
+              0x02, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61,
+              0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80
+            ]);
+            await fs.writeFile(fallbackPath, minimalBuffer);
+          }
+          
+          const fallbackUrl = `/uploads/${fallbackFilename}`;
+          console.log('Returning fallback audio URL:', fallbackUrl);
+          return res.status(200).json({ 
+            audioUrl: fallbackUrl,
+            fallback: true,
+            error: elevenlabsError.message
+          });
+        } catch (fallbackError) {
+          throw new Error(`Failed to create fallback audio: ${fallbackError.message}`);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Text to speech error:', error);
       return res.status(500).json({ 
         message: 'Failed to convert text to speech',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error.message || 'Unknown error'
       });
     }
   });
