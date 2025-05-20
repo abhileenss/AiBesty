@@ -36,8 +36,24 @@ export async function ensureUploadsDirectory(): Promise<string> {
   
   try {
     await fs.access(uploadsDir);
+    console.log('Uploads directory exists at:', uploadsDir);
   } catch (error) {
+    console.log('Creating uploads directory at:', uploadsDir);
     await fs.mkdir(uploadsDir, { recursive: true });
+  }
+  
+  // Create a test file to confirm we have write permissions
+  const testFilePath = path.join(uploadsDir, 'test-access.txt');
+  try {
+    const timestamp = new Date().toISOString();
+    await fs.writeFile(testFilePath, `Test file created at ${timestamp}`);
+    console.log('Successfully created test file in uploads directory');
+    
+    // Check if the file exists after writing
+    const stats = await fs.stat(testFilePath);
+    console.log('Test file confirmed with size:', stats.size, 'bytes');
+  } catch (writeError) {
+    console.error('Error writing test file to uploads directory:', writeError);
   }
   
   return uploadsDir;

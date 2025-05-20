@@ -276,12 +276,14 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
       
       // Convert AI response to speech
       console.log("Converting AI response to speech with ElevenLabs:", {
-        text: aiResponse.text,
+        text: aiResponse.text.substring(0, 30) + "...",
         voice: persona.voice,
         mood: persona.mood
       });
       
       try {
+        // Make text-to-speech API call
+        console.log("Calling /api/text-to-speech endpoint...");
         const speechResponse = await textToSpeech({
           text: aiResponse.text,
           voice: persona.voice,
@@ -291,12 +293,25 @@ export function useConversation({ userId, initialPersona }: UseConversationProps
         
         console.log("ElevenLabs response received:", speechResponse);
         
-        // Play the audio response
-        console.log("Playing audio from URL:", speechResponse.audioUrl);
-        await audioPlayerRef.current.play(speechResponse.audioUrl);
+        if (speechResponse && speechResponse.audioUrl) {
+          // Play the audio response
+          console.log("Playing audio from URL:", speechResponse.audioUrl);
+          await audioPlayerRef.current.play(speechResponse.audioUrl);
+        } else {
+          console.error("No audio URL received from text-to-speech endpoint");
+          toast({
+            title: "Voice playback issue",
+            description: "Could not generate audio response. Check your ElevenLabs API key.",
+            variant: "destructive"
+          });
+        }
       } catch (ttsError) {
         console.error("Text-to-speech conversion failed:", ttsError);
-        throw new Error("Failed to convert AI response to speech");
+        toast({
+          title: "Voice playback issue",
+          description: "Could not play the audio response. Please check your connection.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error("Process message error:", error);
