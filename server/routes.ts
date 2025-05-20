@@ -413,25 +413,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Text is required' });
       }
       
-      // Convert text to speech using ElevenLabs
-      const audioBuffer = await textToSpeech({ 
-        text, 
-        voice: voice || 'female', 
-        mood: mood || 'chill',
-        voiceId
+      console.log('Text-to-speech request received:', { 
+        textLength: text.length, 
+        voice, 
+        mood, 
+        voiceId 
       });
       
-      // Save audio file
-      const filename = generateFilename('tts', 'mp3');
-      const filePath = await saveBufferToFile(audioBuffer, filename);
+      // Ensure uploads directory exists
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      try {
+        await fs.mkdir(uploadsDir, { recursive: true });
+        console.log('Uploads directory created or verified at:', uploadsDir);
+      } catch (mkdirError) {
+        console.error('Error creating uploads directory:', mkdirError);
+      }
       
-      // Get the relative URL path
-      const audioUrl = `/uploads/${filename}`;
-      
-      return res.status(200).json({ audioUrl });
+      try {
+        // Convert text to speech using ElevenLabs
+        console.log('Starting ElevenLabs API call...');
+        const audioBuffer = await textToSpeech({ 
+          text, 
+          voice: voice || 'female', 
+          mood: mood || 'chill',
+          voiceId
+        });
+        console.log('ElevenLabs returned audio data, size:', audioBuffer.length);
+        
+        // Save audio file
+        const filename = generateFilename('tts', 'mp3');
+        const filePath = await saveBufferToFile(audioBuffer, filename);
+        console.log('Audio file saved at:', filePath);
+        
+        // Get the relative URL path
+        const audioUrl = `/uploads/${filename}`;
+        console.log('Returning audio URL:', audioUrl);
+        
+        return res.status(200).json({ audioUrl });
+      } catch (elevenlabsError) {
+        console.error('ElevenLabs API error:', elevenlabsError);
+        throw new Error(`ElevenLabs API error: ${elevenlabsError.message}`);
+      }
     } catch (error) {
       console.error('Text to speech error:', error);
-      return res.status(500).json({ message: 'Failed to convert text to speech' });
+      return res.status(500).json({ 
+        message: 'Failed to convert text to speech',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
   
